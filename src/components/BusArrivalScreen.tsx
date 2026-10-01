@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FullBusRoute, BusStopSummary, StopTimelineItem } from '../types/transit';
+import { FullBusRoute, BusStopSummary, StopTimelineItem, BusArrivalInfo, OccupancyLevel } from '../types/transit';
 
 interface BusArrivalScreenProps {
   busRoute: FullBusRoute;
@@ -14,6 +14,13 @@ interface BusArrivalScreenProps {
   onToggleStopBookmark: () => void;
   hasArrivalAlarm: boolean;
   onToggleArrivalAlarm: () => void;
+  liveArrivals?: {
+    next1: BusArrivalInfo | null;
+    next2: BusArrivalInfo | null;
+    next3: BusArrivalInfo | null;
+  } | null;
+  isLiveLta?: boolean;
+  onOpenApiHealth?: () => void;
 }
 
 export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
@@ -29,10 +36,46 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
   onToggleStopBookmark,
   hasArrivalAlarm,
   onToggleArrivalAlarm,
+  liveArrivals,
+  isLiveLta,
+  onOpenApiHealth,
 }) => {
   // Map zoom and interactive state
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [activeMarkerTooltip, setActiveMarkerTooltip] = useState<string | null>(null);
+
+  // Next arrivals from LTA endpoint or fallback
+  const next1 = liveArrivals?.next1;
+  const next2 = liveArrivals?.next2;
+  const next3 = liveArrivals?.next3;
+
+  const renderLoadBadge = (occupancy: OccupancyLevel) => {
+    if (occupancy === 'seats_avail') {
+      return (
+        <span className="flex items-center gap-1 text-[#10B981] text-[11px] font-bold bg-[#10B981]/10 px-2 py-0.5 rounded-full">
+          <span className="material-symbols-outlined text-[13px]">
+            airline_seat_recline_normal
+          </span>
+          Seats Avail
+        </span>
+      );
+    }
+    if (occupancy === 'standing_only') {
+      return (
+        <span className="flex items-center gap-1 text-[#D97706] text-[11px] font-bold bg-[#F59E0B]/15 px-2 py-0.5 rounded-full">
+          <span className="material-symbols-outlined text-[13px]">person</span>
+          Standing Only
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1 text-[#EF4444] text-[11px] font-bold bg-[#EF4444]/15 px-2 py-0.5 rounded-full">
+        <span className="material-symbols-outlined text-[13px]">groups</span>
+        Full / Crowded
+      </span>
+    );
+  };
+
 
   // Current direction object
   const currentDir =
@@ -159,106 +202,107 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
 
             {/* Live Arrival Triple Chips */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-6">
-              {/* Next Arrival (Arr) */}
+              {/* Next Arrival */}
               <div className="bg-white rounded-xl p-3.5 border border-[#10B981]/30 shadow-sm flex flex-col justify-between relative overflow-hidden bg-gradient-to-b from-[#10B981]/10 to-transparent">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] uppercase font-bold text-[#475569] tracking-wider">
                     Next Arrival
                   </span>
-                  <span className="flex items-center gap-1 text-[#10B981] text-[11px] font-bold bg-[#10B981]/10 px-2 py-0.5 rounded-full">
-                    <span className="material-symbols-outlined text-[13px]">
-                      airline_seat_recline_normal
-                    </span>
-                    Seats Avail
-                  </span>
+                  {renderLoadBadge(next1?.occupancy || 'seats_avail')}
                 </div>
                 <div className="flex items-baseline gap-1.5 my-1.5">
                   <span className="font-extrabold text-[#10B981] text-3xl font-mono tabular-nums leading-tight">
-                    Arr
+                    {next1 ? (next1.etaMinutes === 'Arr' ? 'Arr' : `${next1.etaMinutes}m`) : 'Arr'}
                   </span>
-                  <span className="text-xs text-[#94A3B8]">(&lt; 1 min)</span>
+                  <span className="text-xs text-[#94A3B8]">
+                    {next1 && typeof next1.etaMinutes === 'number' && next1.etaMinutes > 0
+                      ? `(${next1.etaMinutes} min)`
+                      : '(< 1 min)'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-[#475569] pt-2 border-t border-[#10B981]/15">
                   <span className="inline-flex items-center gap-1 font-semibold text-[#3B1C54]">
                     <span className="material-symbols-outlined text-[15px] text-[#3B1C54]">
-                      directions_bus
+                      {next1?.deckType === 'Single Deck' ? 'airport_shuttle' : 'directions_bus'}
                     </span>
-                    Double Deck
+                    {next1?.deckType || 'Double Deck'}
                   </span>
-                  <span
-                    className="material-symbols-outlined text-[#94A3B8] text-[17px]"
-                    title="Wheelchair Accessible Bus"
-                  >
-                    accessible
-                  </span>
+                  {(next1 ? next1.wheelchairAccessible : true) && (
+                    <span
+                      className="material-symbols-outlined text-[#94A3B8] text-[17px]"
+                      title="Wheelchair Accessible Bus"
+                    >
+                      accessible
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* 2nd Bus (8 mins) */}
+              {/* 2nd Bus */}
               <div className="bg-white rounded-xl p-3.5 border border-[#F59E0B]/30 shadow-sm flex flex-col justify-between relative overflow-hidden bg-gradient-to-b from-[#F59E0B]/10 to-transparent">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] uppercase font-bold text-[#475569] tracking-wider">
                     2nd Bus
                   </span>
-                  <span className="flex items-center gap-1 text-[#D97706] text-[11px] font-bold bg-[#F59E0B]/15 px-2 py-0.5 rounded-full">
-                    <span className="material-symbols-outlined text-[13px]">person</span>
-                    Standing Only
-                  </span>
+                  {renderLoadBadge(next2?.occupancy || 'standing_only')}
                 </div>
                 <div className="flex items-baseline gap-1 my-1.5">
                   <span className="font-extrabold text-[#D97706] text-3xl font-mono tabular-nums leading-tight">
-                    8
+                    {next2 ? (next2.etaMinutes === 'Arr' ? 'Arr' : next2.etaMinutes) : '8'}
                   </span>
-                  <span className="text-base font-bold text-[#D97706]">mins</span>
+                  <span className="text-base font-bold text-[#D97706]">
+                    {next2?.etaMinutes === 'Arr' ? '' : 'mins'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-[#475569] pt-2 border-t border-[#F59E0B]/15">
                   <span className="inline-flex items-center gap-1 font-semibold text-[#3B1C54]">
                     <span className="material-symbols-outlined text-[15px] text-[#3B1C54]">
-                      airport_shuttle
+                      {next2?.deckType === 'Double Deck' ? 'directions_bus' : 'airport_shuttle'}
                     </span>
-                    Single Deck
+                    {next2?.deckType || 'Single Deck'}
                   </span>
-                  <span
-                    className="material-symbols-outlined text-[#94A3B8] text-[17px]"
-                    title="Wheelchair Accessible Bus"
-                  >
-                    accessible
-                  </span>
+                  {(next2 ? next2.wheelchairAccessible : true) && (
+                    <span
+                      className="material-symbols-outlined text-[#94A3B8] text-[17px]"
+                      title="Wheelchair Accessible Bus"
+                    >
+                      accessible
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* 3rd Bus (19 mins) */}
+              {/* 3rd Bus */}
               <div className="bg-white rounded-xl p-3.5 border border-[#10B981]/30 shadow-sm flex flex-col justify-between relative overflow-hidden bg-gradient-to-b from-[#10B981]/10 to-transparent">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] uppercase font-bold text-[#475569] tracking-wider">
                     3rd Bus
                   </span>
-                  <span className="flex items-center gap-1 text-[#10B981] text-[11px] font-bold bg-[#10B981]/10 px-2 py-0.5 rounded-full">
-                    <span className="material-symbols-outlined text-[13px]">
-                      airline_seat_recline_normal
-                    </span>
-                    Seats Avail
-                  </span>
+                  {renderLoadBadge(next3?.occupancy || 'seats_avail')}
                 </div>
                 <div className="flex items-baseline gap-1 my-1.5">
                   <span className="font-extrabold text-[#10B981] text-3xl font-mono tabular-nums leading-tight">
-                    19
+                    {next3 ? (next3.etaMinutes === 'Arr' ? 'Arr' : next3.etaMinutes) : '19'}
                   </span>
-                  <span className="text-base font-bold text-[#10B981]">mins</span>
+                  <span className="text-base font-bold text-[#10B981]">
+                    {next3?.etaMinutes === 'Arr' ? '' : 'mins'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-[#475569] pt-2 border-t border-[#10B981]/15">
                   <span className="inline-flex items-center gap-1 font-semibold text-[#3B1C54]">
                     <span className="material-symbols-outlined text-[15px] text-[#3B1C54]">
-                      directions_bus
+                      {next3?.deckType === 'Single Deck' ? 'airport_shuttle' : 'directions_bus'}
                     </span>
-                    Double Deck
+                    {next3?.deckType || 'Double Deck'}
                   </span>
-                  <span
-                    className="material-symbols-outlined text-[#94A3B8] text-[17px]"
-                    title="Wheelchair Accessible Bus"
-                  >
-                    accessible
-                  </span>
+                  {(next3 ? next3.wheelchairAccessible : true) && (
+                    <span
+                      className="material-symbols-outlined text-[#94A3B8] text-[17px]"
+                      title="Wheelchair Accessible Bus"
+                    >
+                      accessible
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

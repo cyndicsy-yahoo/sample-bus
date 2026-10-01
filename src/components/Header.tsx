@@ -6,6 +6,7 @@ interface HeaderProps {
   onOpenSos: () => void;
   onOpenAccessibility: () => void;
   onOpenFavorites: () => void;
+  onOpenApiHealth?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -13,6 +14,7 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   onOpenSos,
   onOpenAccessibility,
+  onOpenApiHealth,
 }) => {
   return (
     <header className="fixed top-0 w-full z-50 bg-[#FFFFFF]/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#E2E8F0]">
@@ -88,8 +90,19 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </nav>
 
-        {/* Right: Quick SOS, Accessibility, Profile */}
-        <div className="flex items-center gap-3">
+        {/* Right: Quick SOS, Accessibility, API Monitor, Profile */}
+        <div className="flex items-center gap-2.5">
+          {onOpenApiHealth && (
+            <button
+              onClick={onOpenApiHealth}
+              className="hidden sm:flex items-center gap-1.5 bg-[#10B981]/10 hover:bg-[#10B981]/20 text-[#10B981] px-2.5 py-1.5 rounded-lg border border-[#10B981]/30 transition-colors cursor-pointer text-xs font-bold"
+              title="Monitor API Health (/api/health)"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
+              <span>API: OK</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenSos}
             className="hidden md:flex items-center gap-1.5 bg-[#ffdad6]/50 hover:bg-[#ffdad6] text-[#ba1a1a] px-3 py-1.5 rounded-lg border border-[#ba1a1a]/20 transition-colors cursor-pointer"

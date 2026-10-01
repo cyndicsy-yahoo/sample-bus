@@ -16,13 +16,15 @@ import { ShareEtaModal } from './components/ShareEtaModal';
 import { ReportCrowdingModal } from './components/ReportCrowdingModal';
 import { AccessibilityModal } from './components/AccessibilityModal';
 import { SosModal } from './components/SosModal';
+import { ApiHealthModal } from './components/ApiHealthModal';
 import {
   CURRENT_DEFAULT_STOP,
   BUS_SERVICES_DATABASE,
   BUS_14_TIMELINE,
   NEARBY_STOPS_LIST,
 } from './data/transitData';
-import { BusStopSummary } from './types/transit';
+import { BusStopSummary, BusArrivalInfo } from './types/transit';
+import { fetchLtaBusArrival, formatLtaBus } from './services/ltaTransitService';
 
 export default function App() {
   // Navigation State
@@ -40,6 +42,13 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isDetectingGps, setIsDetectingGps] = useState<boolean>(false);
 
+  // Live LTA Bus Arrival State
+  const [liveArrivals, setLiveArrivals] = useState<{
+    next1: BusArrivalInfo | null;
+    next2: BusArrivalInfo | null;
+    next3: BusArrivalInfo | null;
+  } | null>(null);
+
   // Bookmarks & Alarms
   const [bookmarkedBuses, setBookmarkedBuses] = useState<string[]>(['14', '190']);
   const [bookmarkedStops, setBookmarkedStops] = useState<string[]>(['08057']);
@@ -50,6 +59,7 @@ export default function App() {
   const [isCrowdingModalOpen, setIsCrowdingModalOpen] = useState(false);
   const [isAccessibilityModalOpen, setIsAccessibilityModalOpen] = useState(false);
   const [isSosModalOpen, setIsSosModalOpen] = useState(false);
+  const [isApiHealthModalOpen, setIsApiHealthModalOpen] = useState(false);
 
   // Accessibility States
   const [highContrast, setHighContrast] = useState(false);
@@ -57,25 +67,56 @@ export default function App() {
   const [wheelchairOnly, setWheelchairOnly] = useState(false);
   const [audioVoiceAnnounce, setAudioVoiceAnnounce] = useState(false);
 
-  // Auto-refresh countdown loop
+  // Fetch LTA bus arrival information
+  const loadArrivalData = async (stopCode: string, busNo: string) => {
+    try {
+      const data = await fetchLtaBusArrival(stopCode, busNo);
+      if (data && data.Services && data.Services.length > 0) {
+        const found =
+          data.Services.find(
+            (s) => s.ServiceNo.toUpperCase() === busNo.toUpperCase()
+          ) || data.Services[0];
+
+        if (found) {
+          setLiveArrivals({
+            next1: formatLtaBus(found.NextBus),
+            next2: formatLtaBus(found.NextBus2),
+            next3: formatLtaBus(found.NextBus3),
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('LTA Bus Arrival fetch error:', err);
+    }
+  };
+
+  // Initial and reactive load on bus/stop change
+  useEffect(() => {
+    loadArrivalData(currentStop.code, currentBusNumber);
+  }, [currentStop.code, currentBusNumber]);
+
+  // Auto-refresh countdown loop (every 20s synced with LTA DataMall refresh standard)
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdownSeconds((prev) => {
         if (prev <= 1) {
+          loadArrivalData(currentStop.code, currentBusNumber);
           return 20;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [currentStop.code, currentBusNumber]);
 
   const handleManualRefresh = () => {
     setIsRefreshing(true);
     setCountdownSeconds(20);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 800);
+    loadArrivalData(currentStop.code, currentBusNumber).finally(() => {
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 700);
+    });
   };
 
   const handleRedetectGps = () => {
@@ -83,17 +124,13 @@ export default function App() {
     setTimeout(() => {
       setIsDetectingGps(false);
       setCurrentStop(CURRENT_DEFAULT_STOP);
+      loadArrivalData(CURRENT_DEFAULT_STOP.code, currentBusNumber);
     }, 900);
   };
 
   const handleSelectBus = (busNo: string) => {
     const normalized = busNo.trim().toUpperCase();
-    if (BUS_SERVICES_DATABASE[normalized] || BUS_SERVICES_DATABASE[busNo]) {
-      setCurrentBusNumber(normalized);
-    } else {
-      // Fallback or dynamically accept
-      setCurrentBusNumber(normalized);
-    }
+    setCurrentBusNumber(normalized);
   };
 
   const isCurrentBusBookmarked = bookmarkedBuses.includes(currentBusNumber);
@@ -149,6 +186,7 @@ export default function App() {
         onOpenSos={() => setIsSosModalOpen(true)}
         onOpenAccessibility={() => setIsAccessibilityModalOpen(true)}
         onOpenFavorites={() => {}}
+        onOpenApiHealth={() => setIsApiHealthModalOpen(true)}
       />
 
       {/* Main Viewport Container */}
@@ -195,6 +233,8 @@ export default function App() {
                 onToggleStopBookmark={handleToggleBookmarkStop}
                 hasArrivalAlarm={hasAlarm}
                 onToggleArrivalAlarm={handleToggleAlarm}
+                liveArrivals={liveArrivals}
+                onOpenApiHealth={() => setIsApiHealthModalOpen(true)}
               />
             )}
 
@@ -264,6 +304,12 @@ export default function App() {
       <SosModal
         isOpen={isSosModalOpen}
         onClose={() => setIsSosModalOpen(false)}
+      />
+
+      <ApiHealthModal
+        isOpen={isApiHealthModalOpen}
+        onClose={() => setIsApiHealthModalOpen(false)}
+        currentStopCode={currentStop.code}
       />
     </div>
   );
