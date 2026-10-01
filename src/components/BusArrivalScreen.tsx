@@ -23,6 +23,18 @@ interface BusArrivalScreenProps {
   onOpenApiHealth?: () => void;
 }
 
+const COMMON_STOP_SERVICES: Record<string, { serviceNo: string; dest: string; via: string; eta: string; occ: string; occLevel: OccupancyLevel }> = {
+  '14': { serviceNo: '14', dest: 'Clementi Int', via: 'via Orchard • Mountbatten', eta: 'Arr', occ: 'Seats Avail', occLevel: 'seats_avail' },
+  '16': { serviceNo: '16', dest: 'Bedok Int', via: 'via Marine Parade', eta: '4m', occ: 'Seats Avail', occLevel: 'seats_avail' },
+  '36': { serviceNo: '36', dest: 'Changi Airport PTB', via: 'Loop Service', eta: '1m', occ: 'Seats Avail', occLevel: 'seats_avail' },
+  '65': { serviceNo: '65', dest: 'HarbourFront Int', via: 'via Lower Delta', eta: '6m', occ: 'Standing', occLevel: 'standing_only' },
+  '124': { serviceNo: '124', dest: 'HarbourFront Int', via: 'via Newton Circus', eta: '7m', occ: 'Standing', occLevel: 'standing_only' },
+  '162': { serviceNo: '162', dest: 'Shenton Way Ter', via: 'via Thomson Rd', eta: '12m', occ: 'Seats Avail', occLevel: 'seats_avail' },
+  '166': { serviceNo: '166', dest: 'Clementi Int', via: 'via Alexandra', eta: '9m', occ: 'Seats Avail', occLevel: 'seats_avail' },
+  '174': { serviceNo: '174', dest: 'Boon Lay Int', via: 'via Bukit Timah • Jurong', eta: 'Arr', occ: 'Seats Avail', occLevel: 'seats_avail' },
+  '190': { serviceNo: '190', dest: 'Kampong Bahru Ter', via: 'via Chinatown', eta: '2m', occ: 'Full', occLevel: 'crowded' },
+};
+
 export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
   busRoute,
   currentStop,
@@ -37,7 +49,6 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
   hasArrivalAlarm,
   onToggleArrivalAlarm,
   liveArrivals,
-  isLiveLta,
   onOpenApiHealth,
 }) => {
   // Map zoom and interactive state
@@ -49,8 +60,20 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
   const next2 = liveArrivals?.next2;
   const next3 = liveArrivals?.next3;
 
-  const renderLoadBadge = (occupancy: OccupancyLevel) => {
-    if (occupancy === 'seats_avail') {
+  const next1EtaStr = next1
+    ? next1.etaMinutes === 'Arr'
+      ? 'Arr'
+      : `${next1.etaMinutes}m`
+    : 'Arr';
+
+  const next2EtaStr = next2
+    ? next2.etaMinutes === 'Arr'
+      ? 'Arr'
+      : `${next2.etaMinutes}m`
+    : '8m';
+
+  const renderLoadBadge = (occupancy?: OccupancyLevel) => {
+    if (!occupancy || occupancy === 'seats_avail') {
       return (
         <span className="flex items-center gap-1 text-[#10B981] text-[11px] font-bold bg-[#10B981]/10 px-2 py-0.5 rounded-full">
           <span className="material-symbols-outlined text-[13px]">
@@ -76,16 +99,25 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
     );
   };
 
+  // Determine other services at this stop, excluding currently selected bus
+  const currentSvc = busRoute.serviceNumber.toUpperCase();
+  const availableOtherKeys = (currentStop.services && currentStop.services.length > 0
+    ? currentStop.services
+    : ['14', '16', '36', '65', '124', '162', '174']
+  ).filter((s) => s.toUpperCase() !== currentSvc);
 
-  // Current direction object
-  const currentDir =
-    busRoute.directions.find((d) => d.id === selectedDirection) ||
-    busRoute.directions[0];
-
-  const otherDir =
-    busRoute.directions.find((d) => d.id !== selectedDirection) ||
-    busRoute.directions[1] ||
-    busRoute.directions[0];
+  const otherServices = availableOtherKeys.slice(0, 5).map((key) => {
+    return (
+      COMMON_STOP_SERVICES[key] || {
+        serviceNo: key,
+        dest: 'Central Int',
+        via: 'Corridor Transit',
+        eta: '5m',
+        occ: 'Seats Avail',
+        occLevel: 'seats_avail' as OccupancyLevel,
+      }
+    );
+  });
 
   return (
     <section className="w-full px-4 sm:px-6 lg:px-8 pb-12 max-w-7xl mx-auto">
@@ -163,7 +195,7 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                     </span>
                   </div>
                   <div className="text-xs text-[#475569] mt-0.5">
-                    Stop 18 of 42 on this route • {currentStop.walkMinutes} min walk ({currentStop.distanceMeters}m)
+                    Stop served by Bus {busRoute.serviceNumber} • {currentStop.walkMinutes} min walk ({currentStop.distanceMeters}m)
                   </div>
                 </div>
               </div>
@@ -208,7 +240,7 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                   <span className="text-[11px] uppercase font-bold text-[#475569] tracking-wider">
                     Next Arrival
                   </span>
-                  {renderLoadBadge(next1?.occupancy || 'seats_avail')}
+                  {renderLoadBadge(next1?.occupancy)}
                 </div>
                 <div className="flex items-baseline gap-1.5 my-1.5">
                   <span className="font-extrabold text-[#10B981] text-3xl font-mono tabular-nums leading-tight">
@@ -307,11 +339,11 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
               </div>
             </div>
 
-            {/* Route Stop Visual Timeline (Vertical with Active GPS nodes) */}
+            {/* Route Stop Visual Timeline (Dynamic for Active Bus) */}
             <div className="pt-2">
               <div className="flex items-center justify-between mb-4">
                 <div className="text-sm font-bold text-[#3B1C54]">
-                  Live Route Progress Preview
+                  Live Route Progress Preview: Bus {busRoute.serviceNumber}
                 </div>
                 <div className="text-xs text-[#475569] flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-[#10B981] inline-block animate-pulse"></span>
@@ -321,102 +353,87 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
 
               {/* Vertical timeline track */}
               <div className="relative pl-6 space-y-4 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-3 before:w-[3px] before:bg-[#e0e3e5]">
-                {/* Stop -1: Past */}
-                <div className="relative flex items-center justify-between group">
-                  <div className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-[#94A3B8] border-2 border-white"></div>
-                  <div>
-                    <div className="text-xs sm:text-sm text-[#94A3B8] line-through font-medium">
-                      YMCA (Stop 08041)
-                    </div>
-                    <div className="text-[11px] text-[#94A3B8]">Departed 2 mins ago</div>
-                  </div>
-                  <span className="text-xs text-[#94A3B8] font-semibold">Past</span>
-                </div>
-
-                {/* Live Vehicle In-Transit Marker */}
-                <div className="relative flex items-center justify-between py-2 px-3 bg-[#5c2d91]/10 -ml-3 rounded-lg border border-[#5c2d91]/25 animate-pulse">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full bg-[#5c2d91] flex items-center justify-center text-white shrink-0">
-                      <span className="material-symbols-outlined text-[13px]">
-                        directions_bus
-                      </span>
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-[#5c2d91]">
-                        SBS3288L approaching Penang Rd junction
+                {timeline.map((item, idx) => {
+                  if (item.status === 'past') {
+                    return (
+                      <div key={item.stopCode + idx} className="relative flex items-center justify-between group">
+                        <div className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-[#94A3B8] border-2 border-white"></div>
+                        <div>
+                          <div className="text-xs sm:text-sm text-[#94A3B8] line-through font-medium">
+                            {item.stopName} (Stop {item.stopCode})
+                          </div>
+                          <div className="text-[11px] text-[#94A3B8]">{item.departedAgo || 'Departed 2 mins ago'}</div>
+                        </div>
+                        <span className="text-xs text-[#94A3B8] font-semibold">Past</span>
                       </div>
-                      <div className="text-[11px] text-[#475569]">
-                        Double Deck • Speed 28 km/h • Occupancy 34%
+                    );
+                  }
+
+                  if (item.status === 'current') {
+                    return (
+                      <React.Fragment key={item.stopCode + idx}>
+                        {/* Live Vehicle In-Transit Marker */}
+                        <div className="relative flex items-center justify-between py-2 px-3 bg-[#5c2d91]/10 -ml-3 rounded-lg border border-[#5c2d91]/25 animate-pulse">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-5 h-5 rounded-full bg-[#5c2d91] flex items-center justify-center text-white shrink-0">
+                              <span className="material-symbols-outlined text-[13px]">
+                                directions_bus
+                              </span>
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-[#5c2d91]">
+                                Bus {busRoute.serviceNumber} ({item.approachingVehicle?.plateNumber || `SBS${busRoute.serviceNumber}88L`}) approaching {item.roadName} junction
+                              </div>
+                              <div className="text-[11px] text-[#475569]">
+                                {next1?.deckType || 'Double Deck'} • Speed 28 km/h • Occupancy 34%
+                              </div>
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded bg-[#10B981] text-white text-[11px] font-bold shrink-0">
+                            120m away
+                          </span>
+                        </div>
+
+                        {/* Current Target Stop */}
+                        <div className="relative flex items-center justify-between bg-white p-3 -ml-3 rounded-lg shadow-sm border border-[#10B981]/30">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-4 h-4 rounded-full bg-[#10B981] ring-4 ring-[#10B981]/20 shrink-0"></div>
+                            <div>
+                              <div className="text-sm font-bold text-[#3B1C54] flex items-center gap-1.5 flex-wrap">
+                                <span>{item.stopName}</span>
+                                <span className="bg-[#440f79] text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">
+                                  Your Location
+                                </span>
+                              </div>
+                              <div className="text-xs text-[#10B981] font-bold">
+                                Arriving in {item.expectedTime || '< 1 min'}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="material-symbols-outlined text-[#5c2d91] text-[20px]">
+                            pin_drop
+                          </span>
+                        </div>
+                      </React.Fragment>
+                    );
+                  }
+
+                  // Upcoming stops
+                  return (
+                    <div key={item.stopCode + idx} className="relative flex items-center justify-between">
+                      <div className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-[#e0e3e5]"></div>
+                      <div>
+                        <div className="text-xs sm:text-sm text-[#0F172A] font-semibold">
+                          {item.stopName} (Stop {item.stopCode})
+                        </div>
+                        <div className="text-[11px] text-[#475569]">
+                          {item.distanceMeters ? `Expected • ${item.distanceMeters}m away` : 'Along route corridor'}
+                        </div>
                       </div>
+                      <span className="text-xs text-[#475569] font-medium">{item.expectedTime || '+5 mins'}</span>
                     </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded bg-[#10B981] text-white text-[11px] font-bold shrink-0">
-                    120m away
-                  </span>
-                </div>
-
-                {/* Current Stop: Active Target */}
-                <div className="relative flex items-center justify-between bg-white p-3 -ml-3 rounded-lg shadow-sm border border-[#10B981]/30">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-4 h-4 rounded-full bg-[#10B981] ring-4 ring-[#10B981]/20 shrink-0"></div>
-                    <div>
-                      <div className="text-sm font-bold text-[#3B1C54] flex items-center gap-1.5 flex-wrap">
-                        <span>{currentStop.name}</span>
-                        <span className="bg-[#440f79] text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">
-                          Your Location
-                        </span>
-                      </div>
-                      <div className="text-xs text-[#10B981] font-bold">
-                        Arriving in &lt; 1 min
-                      </div>
-                    </div>
-                  </div>
-                  <span className="material-symbols-outlined text-[#5c2d91] text-[20px]">
-                    pin_drop
-                  </span>
-                </div>
-
-                {/* Stop +1: Upcoming */}
-                <div className="relative flex items-center justify-between">
-                  <div className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-[#5c2d91]"></div>
-                  <div>
-                    <div className="text-xs sm:text-sm text-[#0F172A] font-semibold">
-                      Hotel Rendezvous (Stop 08069)
-                    </div>
-                    <div className="text-[11px] text-[#475569]">
-                      Expected 10:48 AM • 400m away
-                    </div>
-                  </div>
-                  <span className="text-xs text-[#475569] font-medium">+3 mins</span>
-                </div>
-
-                {/* Stop +2: Upcoming */}
-                <div className="relative flex items-center justify-between">
-                  <div className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-[#e0e3e5]"></div>
-                  <div>
-                    <div className="text-xs sm:text-sm text-[#0F172A] font-semibold">
-                      Sch of the Arts (SOTA) (Stop 08079)
-                    </div>
-                    <div className="text-[11px] text-[#475569]">
-                      Expected 10:51 AM • 750m away
-                    </div>
-                  </div>
-                  <span className="text-xs text-[#475569] font-medium">+6 mins</span>
-                </div>
-
-                {/* Stop +3: Upcoming */}
-                <div className="relative flex items-center justify-between">
-                  <div className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-[#e0e3e5]"></div>
-                  <div>
-                    <div className="text-xs sm:text-sm text-[#0F172A] font-semibold">
-                      Cathay Cineleisure (Stop 09059)
-                    </div>
-                    <div className="text-[11px] text-[#475569]">
-                      Expected 10:55 AM • 1.2km away
-                    </div>
-                  </div>
-                  <span className="text-xs text-[#475569] font-medium">+10 mins</span>
-                </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -450,7 +467,7 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
             </div>
           </div>
 
-          {/* Other Bus Services at This Stop Section */}
+          {/* Other Bus Services at This Stop Section (Dynamic) */}
           <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 border border-[#E2E8F0]">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -458,128 +475,46 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                   Other Services at This Stop
                 </h2>
                 <p className="text-xs text-[#475569]">
-                  {currentStop.name} • 5 active routes incoming
+                  {currentStop.name} • {otherServices.length} other active routes calling here
                 </p>
               </div>
               <span className="text-xs text-[#94A3B8] bg-[#eceef0] px-3 py-1 rounded-full font-semibold border border-[#e0e3e5]">
-                5 Buses
+                {otherServices.length} Buses
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Bus 16 */}
-              <div
-                onClick={() => onSelectBus('16')}
-                className="p-3 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] transition-all flex items-center justify-between cursor-pointer border border-[#e0e3e5] hover:border-[#5c2d91]/30 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-8 rounded-lg bg-[#3B1C54] text-white flex items-center justify-center font-extrabold text-sm shadow-sm group-hover:bg-[#5c2d91] transition-colors">
-                    16
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-[#0F172A]">Bukit Merah Int</div>
-                    <div className="text-[11px] text-[#475569]">via Marine Parade</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] font-bold text-sm font-mono tabular-nums">
-                    4m
-                  </span>
-                  <div className="text-[10px] text-[#94A3B8] font-medium">Seats Avail</div>
-                </div>
-              </div>
-
-              {/* Bus 36 */}
-              <div
-                onClick={() => onSelectBus('36')}
-                className="p-3 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] transition-all flex items-center justify-between cursor-pointer border border-[#e0e3e5] hover:border-[#5c2d91]/30 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-8 rounded-lg bg-[#3B1C54] text-white flex items-center justify-center font-extrabold text-sm shadow-sm group-hover:bg-[#5c2d91] transition-colors">
-                    36
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-[#0F172A]">Changi Airport PTB</div>
-                    <div className="text-[11px] text-[#475569]">Loop Service</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] font-bold text-sm font-mono tabular-nums">
-                    1m
-                  </span>
-                  <div className="text-[10px] text-[#94A3B8] font-medium">Seats Avail</div>
-                </div>
-              </div>
-
-              {/* Bus 124 */}
-              <div
-                onClick={() => onSelectBus('124')}
-                className="p-3 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] transition-all flex items-center justify-between cursor-pointer border border-[#e0e3e5] hover:border-[#5c2d91]/30 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-8 rounded-lg bg-[#3B1C54] text-white flex items-center justify-center font-extrabold text-sm shadow-sm group-hover:bg-[#5c2d91] transition-colors">
-                    124
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-[#0F172A]">St. Michael's Ter</div>
-                    <div className="text-[11px] text-[#475569]">via Newton Circus</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#F59E0B]/20 text-[#D97706] font-bold text-sm font-mono tabular-nums">
-                    7m
-                  </span>
-                  <div className="text-[10px] text-[#94A3B8] font-medium">Standing</div>
-                </div>
-              </div>
-
-              {/* Bus 162 */}
-              <div
-                onClick={() => onSelectBus('162')}
-                className="p-3 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] transition-all flex items-center justify-between cursor-pointer border border-[#e0e3e5] hover:border-[#5c2d91]/30 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-8 rounded-lg bg-[#3B1C54] text-white flex items-center justify-center font-extrabold text-sm shadow-sm group-hover:bg-[#5c2d91] transition-colors">
-                    162
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-[#0F172A]">Yio Chu Kang Ter</div>
-                    <div className="text-[11px] text-[#475569]">via Thomson Rd</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] font-bold text-sm font-mono tabular-nums">
-                    12m
-                  </span>
-                  <div className="text-[10px] text-[#94A3B8] font-medium">Seats Avail</div>
-                </div>
-              </div>
-
-              {/* Bus 174 */}
-              <div
-                onClick={() => onSelectBus('174')}
-                className="p-3 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] transition-all flex items-center justify-between cursor-pointer border border-[#e0e3e5] hover:border-[#5c2d91]/30 sm:col-span-2 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-8 rounded-lg bg-[#3B1C54] text-white flex items-center justify-center font-extrabold text-sm shadow-sm group-hover:bg-[#5c2d91] transition-colors">
-                    174
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-[#0F172A]">Boon Lay Int</div>
-                    <div className="text-[11px] text-[#475569]">
-                      via Bukit Timah • Jurong East
+              {otherServices.map((svc) => (
+                <div
+                  key={svc.serviceNo}
+                  onClick={() => onSelectBus(svc.serviceNo)}
+                  className="p-3 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] transition-all flex items-center justify-between cursor-pointer border border-[#e0e3e5] hover:border-[#5c2d91]/30 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-8 rounded-lg bg-[#3B1C54] text-white flex items-center justify-center font-extrabold text-sm shadow-sm group-hover:bg-[#5c2d91] transition-colors">
+                      {svc.serviceNo}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-[#0F172A]">{svc.dest}</div>
+                      <div className="text-[11px] text-[#475569]">{svc.via}</div>
                     </div>
                   </div>
-                </div>
-                <div className="text-right flex items-center gap-3">
-                  <div className="hidden sm:block text-xs text-[#475569]">
-                    Next: 15m • 26m
+                  <div className="text-right">
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-sm font-mono tabular-nums ${
+                        svc.eta === 'Arr'
+                          ? 'bg-[#10B981] text-white animate-pulse'
+                          : svc.occLevel === 'standing_only'
+                          ? 'bg-[#F59E0B]/20 text-[#D97706]'
+                          : 'bg-[#10B981]/15 text-[#10B981]'
+                      }`}
+                    >
+                      {svc.eta}
+                    </span>
+                    <div className="text-[10px] text-[#94A3B8] font-medium">{svc.occ}</div>
                   </div>
-                  <span className="inline-block px-3 py-1 rounded-full bg-[#10B981] text-white font-extrabold text-xs font-mono animate-pulse shadow-sm">
-                    Arr
-                  </span>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -596,7 +531,7 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                   map
                 </span>
                 <span className="text-base font-bold text-[#3B1C54]">
-                  Corridor Live Radar
+                  Corridor Live Radar: Bus {busRoute.serviceNumber}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -615,15 +550,14 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                 }}
               ></div>
 
-              {/* Subtle dark tint overlay for high contrast HUD overlays */}
+              {/* Subtle dark tint overlay */}
               <div className="absolute inset-0 bg-[#3B1C54]/30 backdrop-blur-[0.5px]"></div>
 
-              {/* Map Overlay: Bus Route Vector Lines (SVG HUD) */}
+              {/* Map Overlay: Bus Route Vector Lines */}
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 xmlns="http://www.w3.org/2000/svg"
               >
-                {/* Route line for Bus 14 */}
                 <path
                   d="M 40,280 Q 140,240 210,180 T 360,110"
                   fill="none"
@@ -640,7 +574,6 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                   strokeLinecap="round"
                   strokeWidth="2"
                 />
-                {/* User walking radius circle */}
                 <circle
                   cx="210"
                   cy="180"
@@ -653,13 +586,13 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                 />
               </svg>
 
-              {/* Map Marker: Bus 14 Approaching (Dynamic Pill) */}
+              {/* Map Marker: Bus Approaching (Dynamic Pill) */}
               <div
                 onClick={() =>
                   setActiveMarkerTooltip(
-                    activeMarkerTooltip === 'bus14'
+                    activeMarkerTooltip === 'busApproaching'
                       ? null
-                      : 'Bus SBS3288L (Double Deck) is 120m away from Dhoby Ghaut Exit B. Arriving in < 1 min.'
+                      : `Bus ${busRoute.serviceNumber} (${next1?.deckType || 'Double Deck'}) is approaching ${currentStop.name}. ETA: ${next1EtaStr}.`
                   )
                 }
                 className="absolute top-[165px] left-[150px] -translate-x-1/2 -translate-y-1/2 bg-white text-[#191c1e] shadow-xl rounded-full px-2.5 py-1 flex items-center gap-1.5 animate-bounce cursor-pointer border border-[#E2E8F0] hover:scale-105 transition-transform"
@@ -667,7 +600,7 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
               >
                 <span className="w-2 h-2 rounded-full bg-[#10B981]"></span>
                 <span className="text-xs font-extrabold text-[#3B1C54]">
-                  {busRoute.serviceNumber} • Arr
+                  {busRoute.serviceNumber} • {next1EtaStr}
                 </span>
                 <span className="material-symbols-outlined text-[14px] text-[#10B981]">
                   navigation
@@ -699,16 +632,16 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
               <div
                 onClick={() =>
                   setActiveMarkerTooltip(
-                    activeMarkerTooltip === 'bus14_2'
+                    activeMarkerTooltip === 'busQueue'
                       ? null
-                      : `Bus SBS3341G (Single Deck) is near Mountbatten, approx 8 mins away.`
+                      : `2nd Bus ${busRoute.serviceNumber} (${next2?.deckType || 'Single Deck'}) in transit, approx ${next2EtaStr} away.`
                   )
                 }
                 className="absolute top-[260px] left-[70px] -translate-x-1/2 -translate-y-1/2 bg-white/95 text-[#191c1e] shadow-lg rounded-full px-2 py-0.5 flex items-center gap-1 cursor-pointer border border-[#E2E8F0] hover:scale-105 transition-transform"
               >
                 <span className="w-2 h-2 rounded-full bg-[#F59E0B]"></span>
                 <span className="text-[11px] font-bold text-[#0F172A]">
-                  {busRoute.serviceNumber} • 8m
+                  {busRoute.serviceNumber} • {next2EtaStr}
                 </span>
               </div>
 
@@ -851,9 +784,11 @@ export const BusArrivalScreen: React.FC<BusArrivalScreenProps> = ({
                   <span className="material-symbols-outlined text-[#5c2d91] text-[18px]">
                     av_timer
                   </span>
-                  <span>Average headway along Bras Basah corridor:</span>
+                  <span>Average headway along corridor:</span>
                 </div>
-                <span className="font-bold text-[#3B1C54] font-mono">6 - 9 mins</span>
+                <span className="font-bold text-[#3B1C54] font-mono">
+                  {busRoute.operatingHours.headwayPeak}
+                </span>
               </div>
               <div className="w-full bg-[#e6e8ea] rounded-full h-2 mt-2 overflow-hidden">
                 <div

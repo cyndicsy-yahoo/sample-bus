@@ -22,6 +22,8 @@ import {
   BUS_SERVICES_DATABASE,
   BUS_14_TIMELINE,
   NEARBY_STOPS_LIST,
+  getBusRoute,
+  getStopTimeline,
 } from './data/transitData';
 import { BusStopSummary, BusArrivalInfo } from './types/transit';
 import { fetchLtaBusArrival, formatLtaBus } from './services/ltaTransitService';
@@ -161,10 +163,9 @@ export default function App() {
     }
   };
 
-  // Get bus route or fallback to Bus 14
-  const busRoute =
-    BUS_SERVICES_DATABASE[currentBusNumber] ||
-    BUS_SERVICES_DATABASE['14'];
+  // Get bus route dynamically for ANY Singapore bus service
+  const busRoute = getBusRoute(currentBusNumber, currentStop);
+  const timeline = getStopTimeline(busRoute, currentStop, liveArrivals?.next1?.etaMinutes);
 
   const fontClass =
     fontSize === 'xlarge'
@@ -223,7 +224,7 @@ export default function App() {
                 currentStop={currentStop}
                 selectedDirection={selectedDirection}
                 onSelectDirection={setSelectedDirection}
-                timeline={BUS_14_TIMELINE}
+                timeline={timeline}
                 onSelectBus={(bus) => {
                   handleSelectBus(bus);
                 }}
