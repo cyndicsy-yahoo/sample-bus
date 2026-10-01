@@ -1,0 +1,6 @@
+{
+  "name": "SBS Transit Live - Real-Time Bus Arrivals",
+  "description": "Real-time SBS Transit bus arrival tracker with live LTA DataMall v3 headways, seat availability, corridor radar, and route explorer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
